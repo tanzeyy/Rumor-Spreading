@@ -70,4 +70,3 @@ if __name__ == "__main__":
         np.save(os.path.join(path, "rumor_results.npy"), rumor_distances)
         np.save(os.path.join(path, "ml_results.npy"), ml_distances)
         print("Experiment took %.3f seconds." % (time.clock() - start))
-        print("\n")
