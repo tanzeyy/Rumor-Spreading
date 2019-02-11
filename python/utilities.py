@@ -1,7 +1,15 @@
 # utilities
-import random
-from scipy import stats    
 import argparse
+import os
+import random
+
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+from scipy import stats
+
+from diffusion_graph import DiffGraph
+
 
 def parse_args(args):
     '''
@@ -138,7 +146,8 @@ def N(T,d):
 def print_adjacency(adj, true):
     for i in range(len(adj)):
         if len(adj[i]) > 0:
-            print(i, ': ', adj[i], ' (', true[i],')')
+            pass
+            # print(i, ': ', adj[i], ' (', true[i],')')
             
 def update_spies_diffusion(candidates, spy_probability = 0.3):
     spies = []
@@ -146,4 +155,72 @@ def update_spies_diffusion(candidates, spy_probability = 0.3):
         if random.random() < spy_probability:
             spies.append(candidate)
     return spies
+
+
+class graphFetcher():
+    def __init__(self,
+                 data_path="data/", 
+                 graph_path = "graphs/graphs.txt"):
+        self._data_path = os.path.join(data_path)
+        self._graphs = {}
+        with open(graph_path, 'r+') as f:
+            graphs = f.read().splitlines()
+        # Unpack info from file name
+        for graph in graphs:
+            graph_name, source, time, num, total = np.array(
+                graph.split('.')[0].split('-'))[[0, 2, 4, 6, 8]]
+            info = np.array([source, time, num, total]).astype(np.int)
+            self._graphs[graph_name] = (graph, info)
         
+        print("%d graphs found: " % len(graphs))
+        print(list(self._graphs.keys()))
+
+    def _load(self, graph):
+        graph_path, info = graph
+        g = nx.read_gpickle(os.path.join(
+            self._data_path, graph_path))
+        source, _, _, _ = info
+        s = set()
+        for node_id in g.nodes:
+            node = g.nodes[node_id]
+            if node['state'] == 1:
+                s.add(node_id)
+        G = DiffGraph(g,
+                      visible_rate=0,
+                      load_graph=True,
+                      contagion_source=source,
+                      obs_hop=1)
+        G.contagion_set = s
+        return G, info
+    
+    def __iter__(self):
+        for graph_name in self._graphs.keys():
+            yield graph_name
+    
+    def get(self, graph_name):
+        graph = self._graphs[graph_name]
+        return self._load(graph)
+
+def check_path(path):
+    try:
+        if not os.path.exists(path):
+            os.makedirs(path)
+        return True
+    except:
+        return False
+   
+def build_adjacency(g, info):
+    _, _, _, total = info
+    adj = dict(g.graph.adjacency())
+    adjacency = [[] for _ in range(total)]
+    for k, v in adj.items():
+        adjacency[k] += list(v.keys())
+    return adjacency
+
+
+if __name__ == "__main__":
+    gf = graphFetcher()
+    g, info = gf.get('as')
+    adj1 = build_adjacency(g, info)
+    adj2 = build_adjacency(*gf.get('as'))
+    assert(adj1 == adj2)

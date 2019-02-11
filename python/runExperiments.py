@@ -1,134 +1,59 @@
 # runExperiments
-import utilities
-import buildGraph
-import infectionModels
-import spyInfectionModels
-import snapshotInfectionModels
-import exportGraph
-import adversaries
 import random
+
+import networkx as nx
 import numpy as np
+import tqdm
+
+import infectionModels
+import utilities
+from diffusion_graph import DiffGraph
 
 '''Runs a spreading algorithm over a real dataset. Either pramod's algo (deterministic) or message passing (ours)'''    
-def run_dataset(filename, min_degree, trials, max_time=100, max_infection = -1, max_num_nodes = 4941,
-                spies = False, spy_probability = 0.0, diffusion = False, q = 1.0):
+def run_dataset(adjacency, trials, max_time=20, max_infection=-1, graph_name='as'):
     '''Run dataset runs a spreading algorithm over a dataset. 
     Inputs:
     
           filename:               name of the file containing the data
-          min_degree:             remove all nodes with degree lower than min_degree
           trials:                 number of trials to run
           max_time(opt):          the maximum number of timesteps to use
           max_infection(opt):     the maximum number of nodes a node can infect in any given timestep
     
     Outputs:
     
-          p:                      average proportion of nodes reached by the algorithm 
-          num_infected:           total number of nodes infected by the algorithm
+          dists:                  erro distances of jordan center, rumor center, ml estimator.
     
     NB: If max_infection is not set, then we'll run the deterministic algorihtm. Otherwise, it's the message passing one. '''
-    
-    print('spy probability',spy_probability)
-    adjacency = buildGraph.buildDatasetGraph(filename, min_degree, max_num_nodes)
+    # adjacency = buildGraph.buildDatasetGraph(filename, min_degree, max_num_nodes)
+
     num_nodes = len(adjacency)
     num_true_nodes = sum([len(item)>0 for item in adjacency])
     
-    print('----Graph statistics:-----')
+    print('----Graph %s statistics:-----' % graph_name)
     degrees = [len(item) for item in adjacency]
     mean_degree = np.mean(degrees)
     num_threes = len([i for i in degrees if i == 3])
-    print("the number of 3s is ", float(num_threes) / len(degrees))
     print('the mean degree is',mean_degree)
     print('num true nodes',num_true_nodes)
     print('---------------------------\n')
-    
-    num_infected = 0
-    p = 0
-    pd_jordan = [0 for i in range(max_time)]
-    pd_rumor = [0 for i in range(max_time)]
-    pd_ml_leaf = [0 for i in range(max_time)]
-    pd_spy = [0 for i in range(max_time)]
-    avg_num_infected = [0 for i in range(max_time)]
-    # avg_leaf_dists = [[0,0] for i in range(max_time)]
-    avg_leaf_dists = [0 for i in range(max_time)]
 
-    for trial in range(trials):
+    dists = []
+
+    pbar = tqdm.tqdm(range(trials))
+    for trial in pbar:
         # if trial % 20 == 0:
-        print('Trial ',trial, ' / ',trials)
         while True:
             source = random.randint(0,num_nodes-1)
             if len(adjacency[source]) > 0:
                 break
-        if max_infection == -1:      # i.e. we're running the deterministic version
-            num_infected, infection_pattern = infectionModels.infect_nodes_deterministic_reinfect(source,adjacency)
-            print('num nodes',sum([1 for r in adjacency if len(r)>0]))
-        else:
-            if spies:
-                # WIth spies
-                
-                if diffusion:  
-                    # Run diffusion + first-spy estimator
-                    diff_infector = spyInfectionModels.DatasetDiffusionInfector(adjacency, spy_probability, max_infection,q=q)
-                    infection_details = diff_infector.infect(source, max_time)
-                    who_infected, num_infected = infection_details
-                    
-                    print('infection done!')
-                    # Estimate the source
-                    adversary = adversaries.DiffusionSpiesAdversary(source, diff_infector.spies_info, who_infected)
-                    results = adversary.get_estimates(max_time)
-                    ml_leaf_correct, spy_correct, hop_distances = results
-                    
-                else:
-                    # Run adaptive diffusion + spies ML estimator
-                
-                    # Infect nodes
-                    up_down_infector = spyInfectionModels.DatasetUpDownInfector(adjacency, spy_probability, max_infection)
-                    infection_details = up_down_infector.infect(source, max_time)
-                    who_infected, num_infected = infection_details
-                    
-                    # Estimate the source
-                    adversary = adversaries.DatasetUpDownAdversary(source, up_down_infector.spies_info, who_infected, adjacency, max_infection)
-                    results = adversary.get_estimates(max_time)
-                    ml_leaf_correct, hop_distances = results
-                    
-
-            else:   # snapshot adversary
-                num_infected, infection_pattern, who_infected, results = infectionModels.infect_nodes_adaptive_diff(source,adjacency,max_time,max_infection)
-                # unpack the results
-                jordan_correct, rumor_correct, ml_leaf_correct, ml_leaf_dists = results
-                # print('dists', ml_leaf_dists)
-            
-                pd_jordan = [i+j for (i,j) in zip(pd_jordan, jordan_correct)]
-                pd_rumor = [i+j for (i,j) in zip(pd_rumor, rumor_correct)]
-                # avg_leaf_dists = [[k+m for (k,m) in zip(i,j)] for (i,j) in zip(ml_leaf_dists, avg_leaf_dists)]
-                avg_leaf_dists = [i+j for (i,j) in zip(ml_leaf_dists, avg_leaf_dists)]
-            
-            pd_ml_leaf = [i+j for (i,j) in zip(pd_ml_leaf, ml_leaf_correct)]
-            if spies and diffusion:
-                pd_spy = [i+j for (i,j) in zip(pd_spy, spy_correct)]
-            # write the infected subgraph to file
-            # filename = 'infected_subgraph_'+str(trial)
-            # exportGraph.export_gexf(filename,who_infected,source,infection_pattern,adjacency)
-        print("infected", num_infected)
-        p += float(num_infected[-1]) / num_true_nodes
-        avg_num_infected = [i+j for (i,j) in zip(avg_num_infected, num_infected)]
-    p = p / trials
-    pd_jordan = [float(i)/trials for i in pd_jordan]
-    pd_rumor = [float(i)/trials for i in pd_rumor]
-    pd_ml_leaf = [float(i) / trials for i in pd_ml_leaf]
-    if spies and diffusion:
-        pd_spy = [float(i) / trials for i in pd_spy]
-    avg_num_infected = [ float(i) / trials for i in avg_num_infected]
-    # avg_leaf_dists = [[float(k) / trials for k in i] for i in avg_leaf_dists]
-    avg_leaf_dists = [float(i) / trials for i in avg_leaf_dists]
-    if spies:
-        if diffusion:
-            results = (pd_ml_leaf, pd_spy, avg_leaf_dists)
-        else:
-            results = (pd_ml_leaf, avg_leaf_dists)
-    else:
-        results = (pd_jordan, pd_rumor, pd_ml_leaf, avg_leaf_dists)
-    return p, avg_num_infected, results
+        num_infected, infection_pattern, who_infected, results = infectionModels.infect_nodes_adaptive_diff(source,adjacency,max_time,max_infection)
+        # results = infectionModels.detect_source(source, adjacency, max_time, max_infection)
+        # unpack the results
+        jordan_distances, rumor_distances, ml_distances = results
+        dists.append(results)
+        pbar.set_description('Trial %d' % trial)
+        # print('dists', ml_leaf_dists)
+    return dists
     
 '''Run a random tree'''    
 def run_randtree(trials, max_time, max_infection, degrees_rv, method=0, known_degrees=[], additional_time = 0,

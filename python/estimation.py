@@ -40,7 +40,8 @@ def rumor_centrality(who_infected):
     down_messages = rumor_centrality_down(down_messages,up_messages,who_infected,initial_node,initial_node)
     max_down = max(down_messages)
     max_down_ind = [i for i, j in enumerate(down_messages) if j == max_down]
-    return max_down_ind[random.randrange(0,len(max_down_ind),1)]
+    rumor_center = max_down_ind[random.randrange(0,len(max_down_ind),1)]
+    return rumor_center
 
 def jordan_centrality(adjacency):
     # computes the estimate of the source based on jordan centrality
@@ -172,13 +173,13 @@ def max_likelihood(who_infected, virtual_source, adjacency, max_infection, dist_
     indices = [i for i, x in enumerate(likelihoods) if x == max_likelihood]
     ml_estimate = random.choice(indices)
     # print('Finding the tree distance')
-    tree_dist = dist_from_source[ml_estimate]
+    # tree_dist = dist_from_source[ml_estimate]
     # print('Tree distance: ', tree_dist)
     # print('Tree distance: ', tree_dist, '. Now finding real dist. ')
-    # real_dist = get_estimate_dist(source, ml_estimate, adjacency)
+    real_dist = get_estimate_dist(source, ml_estimate, adjacency)
     # print('Real distance: ', real_dist)
     # distances = [tree_dist, real_dist]
-    distances = tree_dist
+    distances = real_dist
     return ml_estimate, likelihoods, distances
     
 def compute_graph_likelihood(source, who_infected, adjacency, vs_path, max_infection):
@@ -194,7 +195,7 @@ def compute_graph_likelihood(source, who_infected, adjacency, vs_path, max_infec
     #       likelihood          likelihood of the graph given source 
     
     if len(vs_path) == 1:
-        print('The vs path is 1 hop!', source, vs_path)
+        # print('The vs path is 1 hop!', source, vs_path)
         utilities.print_adjacency(who_infected, adjacency)
         return float('-inf')
     
@@ -215,7 +216,13 @@ def compute_graph_likelihood(source, who_infected, adjacency, vs_path, max_infec
     
     # infect the neighbors of the new vs
     infected = [i for i in who_infected[current_vs]]
-    infected.remove(source)
+    try:
+        infected.remove(source)
+    except:
+        pass
+        # infected.remove(-1)
+    finally:
+        pass
     
     new_infection_pattern, new_who_infected, tmp = infectionUtils.infect_nodes(current_vs, infected, new_infection_pattern, new_who_infected)
     likelihood += infect_set_likelihood(infected, adjacency[current_vs], new_infection_pattern, max_infection)

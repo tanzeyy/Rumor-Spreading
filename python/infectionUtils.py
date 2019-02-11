@@ -1,11 +1,13 @@
 #infectionUtils.py useful functions for infection
-import utilities
 import random
-from scipy import stats
-import numpy as np
 import time
+
 import networkx as nx
-import estimation_spies     # TODO: get rid of this and function estimate_source_spies!
+import numpy as np
+from scipy import stats
+
+import utilities
+
 
 # The infector class that will be used in all subsequent infection code
 class Infector(object):
@@ -38,6 +40,7 @@ def pick_random_elements(neighbors,num_neighbors):
     #       neighbors           the updated neighbors, without random_elements
     
     random_elements = []
+    # randomly pick num_neighbors 
     for i in range(num_neighbors):
         random_element = random.choice(neighbors)
         neighbors.remove(random_element)
@@ -393,4 +396,3 @@ def estimate_source_spies(max_time, est_times, source, who_infected, num_infecte
         infection_details = (tot_num_infected, who_infected, hop_distances)
         results = (ml_correct)
     return infection_details, results
-    

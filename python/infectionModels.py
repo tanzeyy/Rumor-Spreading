@@ -1,17 +1,19 @@
 # node infection
-import estimation
-import estimation_spies
 import random
-from scipy import stats
-import numpy as np
-import utilities
-import infectionUtils
-import networkx as nx
 import time
+
+import networkx as nx
+import numpy as np
+from scipy import stats
+
+import estimation
+import infectionUtils
+import utilities
+from diffusion_graph import DiffGraph
 from infectionUtils import *
-from spies import *
-from multinomial import *
+
 # import cProfile
+
 
 #Semi-distributed adaptive diffusion over regular trees (uses two timesteps)
 def infect_nodes_adaptive_tree(source, adjacency, max_degree, max_time, alpha):
@@ -154,7 +156,7 @@ def infect_nodes_diffusion_irregular_tree(source, max_time, degrees_rv, q = 0.5,
         
         num_infected = len(who_infected)
         
-    print('num_infected: ', num_infected)
+    # print('num_infected: ', num_infected)
     
     infection_details, results = estimate_source_spies(max_time, est_times, source, who_infected,
                                                        num_infected, timestamps, spies,
@@ -485,8 +487,13 @@ def infect_nodes_adaptive_diff(source, adjacency, max_time, max_infection):
     jordan_correct = [0 for i in range(max_time)]
     rumor_correct = [0 for i in range(max_time)]
     ml_correct = [0 for i in range(max_time)]
+
+    # distances 
+    jordan_distances = [[] for i in range(max_time)]
+    rumor_distances = [[] for i in range(max_time)]
     ml_distances = [[] for i in range(max_time)]
         
+
     num_infected = []
     
     blocked = False
@@ -494,6 +501,12 @@ def infect_nodes_adaptive_diff(source, adjacency, max_time, max_infection):
     while timesteps < max_time:
         # print('time', timesteps)
     
+
+        # TODO: Replace infection process: read exsit diffusion graph
+        # g = DiffGraph()
+        # info = (None, None, None, g.graph.number_of_nodes())
+        # adjacency = build_adjacency(g, info)
+
         # in odd timesteps, choose a direction to expand in
         if timesteps == 0:
             current_neighbors = [k for k in adjacency[source]]
@@ -544,24 +557,46 @@ def infect_nodes_adaptive_diff(source, adjacency, max_time, max_infection):
         # print('Adjacency at time ', timesteps)
         # utilities.print_adjacency(who_infected, adjacency)
         # print('\n')
+
+
+
+
         num_infected = num_infected + [sum(infection_pattern)]
 
+        # TODO: Require: who_infected: infected subgraph adjacency,
+        #                virtual_source: randomly pick a node (?), 
+        #                adjacency: graph, 
+        #                max_infection: maximum number of people who can be infected by a single node, 
+        #                dist_from_source: could be None, 
+        #                source: the true source.
+
+        # who_infected = adjacency
+        # nodes = list(g.graph.nodes)
+        # virtual_source = random.choice(nodes)
+        # dist_from_source = None
+        # source = 0
+
+
         # Jordan-centrality estimate
-        # jordan_estimate = estimation.jordan_centrality(who_infected)
+        jordan_estimate = estimation.jordan_centrality(who_infected)
+        jordan_dist = estimation.get_estimate_dist(source, jordan_estimate, adjacency)
+        jordan_distances[timesteps] = jordan_dist
         # jordan_correct[timesteps] = (jordan_estimate == source)
-        jordan_correct[timesteps] = 0
+        # jordan_correct[timesteps] = 0
 
         # Rumor centrality estimate
-        # rumor_estimate = estimation.rumor_centrality(who_infected)
+        rumor_estimate = estimation.rumor_centrality(who_infected)
+        rumor_dist = estimation.get_estimate_dist(source, rumor_estimate, adjacency)
+        rumor_distances[timesteps] = rumor_dist
         # rumor_correct[timesteps] = (rumor_estimate == source)
-        rumor_correct[timesteps] = 0
-        
+        # rumor_correct[timesteps] = 0
+
         # ML estimate
         ml_leaf, likelihoods, ml_distance = estimation.max_likelihood(who_infected, virtual_source, adjacency, max_infection, dist_from_source, source)
-        ml_correct[timesteps] = (ml_leaf == source)
+        # ml_correct[timesteps] = (ml_leaf == source)
         ml_distances[timesteps] = ml_distance
         
-        results = (jordan_correct, rumor_correct, ml_correct, ml_distances)
+        results = (jordan_distances, rumor_distances, ml_distances)
         timesteps += 1
     return num_infected, infection_pattern, who_infected, results
     
@@ -596,7 +631,7 @@ def infect_nodes_deterministic(source, adjacency, greedy = False):
                     blocked = True
                     break
                 if greedy:
-                    up_elements, current_neighbors = pick_random_elements_greedy(current_neighbors,1,adjacency,infection_pattern,node)[:2]
+                    up_elements, current_neighbors = pick_elements_greedy(current_neighbors,1,adjacency,infection_pattern,node)[:2]
                 else:
                     up_elements, current_neighbors = pick_random_elements(current_neighbors,1)[:2]
                 for item in up_elements:
@@ -649,5 +684,47 @@ def infect_nodes_deterministic(source, adjacency, greedy = False):
     print("Infected ", infected_nodes, " / ", num_nodes, " total nodes.")
     return num_infected, infection_pattern
 
+# Detect source from a diffusion graph
+def detect_source(source, adjacency, max_time, max_infection):
+    num_nodes = len(adjacency)
 
+    who_infected = adjacency
+    virtual_source = random.randint(0, num_nodes-1)
+    dist_from_source = None
+    source = 0
 
+    # distances 
+    jordan_distances = [[] for i in range(max_time)]
+    rumor_distances = [[] for i in range(max_time)]
+    ml_distances = [[] for i in range(max_time)]
+
+    # TODO: Replace infection process: read exsit diffusion graph
+
+    # Jordan-centrality estimate
+    jordan_estimate = estimation.jordan_centrality(who_infected)
+    jordan_dist = estimation.get_estimate_dist(source, jordan_estimate, adjacency)
+    jordan_distances[0] = jordan_dist
+    # jordan_correct[timesteps] = (jordan_estimate == source)
+    # jordan_correct[timesteps] = 0
+
+    # Rumor centrality estimate
+    rumor_estimate = estimation.rumor_centrality(who_infected)
+    rumor_dist = estimation.get_estimate_dist(source, rumor_estimate, adjacency)
+    rumor_distances[0] = rumor_dist
+    # rumor_correct[timesteps] = (rumor_estimate == source)
+    # rumor_correct[timesteps] = 0
+
+    # TODO: Require: who_infected: infected subgraph adjacency,
+    #                virtual_source: randomly pick a node (?), 
+    #                adjacency: graph, 
+    #                max_infection: maximum number of people who can be infected by a single node, 
+    #                dist_from_source: could be None, 
+    #                source: the true source.
+
+    # ML estimate
+    ml_leaf, likelihoods, ml_distance = estimation.max_likelihood(who_infected, virtual_source, adjacency, max_infection, dist_from_source, source)
+    # ml_correct[timesteps] = (ml_leaf == source)
+    ml_distances[0] = ml_distance
+    
+    results = (jordan_distances, rumor_distances, ml_distances)
+    return results
