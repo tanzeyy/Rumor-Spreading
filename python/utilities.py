@@ -157,49 +157,62 @@ def update_spies_diffusion(candidates, spy_probability = 0.3):
     return spies
 
 
+
+
 class graphFetcher():
     def __init__(self,
-                 data_path="data/", 
-                 graph_path = "graphs/graphs.txt"):
-        self._data_path = os.path.join(data_path)
-        self._graphs = {}
+                 graph_name="small_world",
+                 flag="train",
+                 data_path="data",
+                 size=(0, 200),
+                 visible_rate=0):
+        graph_path = "graphs/%s_%s.txt" % (graph_name, flag)
+        self._data_path = os.path.join(data_path, graph_name)
+        self._graphs = []
+        self._vr = visible_rate
         with open(graph_path, 'r+') as f:
             graphs = f.read().splitlines()
         # Unpack info from file name
         for graph in graphs:
-            graph_name, source, time, num, total = np.array(
+            _, source, time, num, total = np.array(
                 graph.split('.')[0].split('-'))[[0, 2, 4, 6, 8]]
             info = np.array([source, time, num, total]).astype(np.int)
-            self._graphs[graph_name] = (graph, info)
-        
-        print("%d graphs found: " % len(graphs))
-        print(list(self._graphs.keys()))
+            if info[2] in range(*size):
+                self._graphs.append((graph, info))
+
+        random.shuffle(self._graphs)
+        self._cur_idx = 0
+        if len(self._graphs) == 0:
+            raise("No graph meets the requirement.")
+
+    def __iter__(self):
+        for graph in self._graphs:
+            g, info = self._load(graph)
+            yield g, info
+
+    def __next__(self):
+        g, info = self._load(self._graphs[self._cur_idx % len(self._graphs)])
+        self._cur_idx += 1
+        return g, info
+
+    def __len__(self):
+        return len(self._graphs)
+
+    def __repr__(self):
+        _, info = self._load(self._graphs[self._cur_idx % len(self._graphs)])
+        return str(info)
 
     def _load(self, graph):
         graph_path, info = graph
         g = nx.read_gpickle(os.path.join(
             self._data_path, graph_path))
         source, _, _, _ = info
-        s = set()
-        for node_id in g.nodes:
-            node = g.nodes[node_id]
-            if node['state'] == 1:
-                s.add(node_id)
         G = DiffGraph(g,
-                      visible_rate=0,
+                      visible_rate=self._vr,
                       load_graph=True,
                       contagion_source=source,
                       obs_hop=1)
-        G.contagion_set = s
         return G, info
-    
-    def __iter__(self):
-        for graph_name in self._graphs.keys():
-            yield graph_name
-    
-    def get(self, graph_name):
-        graph = self._graphs[graph_name]
-        return self._load(graph)
 
 def check_path(path):
     try:
@@ -210,12 +223,16 @@ def check_path(path):
         return False
    
 def build_adjacency(g, info):
-    _, _, _, total = info
+    source, _, _, total = info
     adj = dict(g.graph.adjacency())
+    infected_adj = dict(g.contagion_subgraph.adjacency())
     adjacency = [[] for _ in range(total)]
+    who_infected = [[] for _ in range(total)]
     for k, v in adj.items():
         adjacency[k] += list(v.keys())
-    return adjacency
+    for k, v in infected_adj.items():
+        who_infected[k] += list(v.keys())
+    return adjacency, who_infected, source
 
 
 if __name__ == "__main__":

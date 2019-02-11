@@ -23,15 +23,14 @@ class DiffGraph():
         self.graph = G
         self._invisible_rate = 1 - visible_rate
         self._obs_hop = obs_hop
-        self.contagion_set  = set()
+        self.contagion_set = set()
+        # Tree-like contagion subgraph
+        self.contagion_subgraph = None
         if not load_graph:
             self._set_graph_state()
             self._set_contagion_states()
         else:
-            for node_id in G.nodes:
-                node = G.nodes[node_id]
-                if node['state'] == 1:
-                    self.contagion_set.add(node_id)
+            self._set_load_graph()
 
         if contagion_source is None:
             contagion_source = random.choice(list(self.graph.nodes))
@@ -200,6 +199,7 @@ class DiffGraph():
         """
         for _ in range(steps):
             self._contaminate_one_step()
+        self._set_contagion_subgraph()
 
     def _nodes_attrs(self, nodes=None):
         nodes_set = self.graph.nodes if nodes == None else nodes
@@ -258,6 +258,23 @@ class DiffGraph():
         local_s = contagion_time[max_time, :]
         return local_s[1]
 
+    def _set_contagion_subgraph(self):
+        edge_set = set()
+        for edge in self.graph.edges:
+            if self.graph.edges[edge]['used_time'] == 1:
+                edge_set.add(edge)
+        self.contagion_subgraph = nx.Graph(nx.edge_subgraph(self.graph, edge_set))
+    
+    def _set_contagion_set(self):
+        for node_id in self.graph.nodes:
+            node = self.graph.nodes[node_id]
+            if node['state'] == 1:
+                self.contagion_set.add(node_id)
+
+    def _set_load_graph(self):
+        self._set_contagion_set()
+        self._set_contagion_subgraph()
+
     # TODO: Add embedding method
     def _deep_embed(self):
         pass
@@ -287,11 +304,14 @@ if __name__ == "__main__":
     #     input("Please press enter")
     #     G.contaminate()
     # plt.ioff()
-    # G.contaminate(5)
+    G.contaminate(5)
     # print(G.graph.nodes[12])
     print(G.get_subgraph(1))
     print(G.combined_features())
-    # pos = nx.spring_layout(g)
-    # draw(G.graph, [0], pos)
-    # plt.show()  
+    print(G.contagion_subgraph)
+    pos = nx.spring_layout(g)
+    # nx.draw(G.graph, pos=pos, with_labels=True)
+    # plt.show()
+    nx.draw(G.contagion_subgraph, pos=pos, with_labels=True)
+    plt.show()  
 

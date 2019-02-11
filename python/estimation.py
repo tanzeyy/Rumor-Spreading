@@ -139,7 +139,7 @@ def find_center(root, up_count, up_count_2nd, up_id, up_id_2nd):
     return idx_jordan
     
 # ML Estimate
-def max_likelihood(who_infected, virtual_source, adjacency, max_infection, dist_from_source, source):
+def max_likelihood(who_infected, adjacency, max_infection=-1):
     # compute the maximum likelihood estimate of the source using only leaves
     # Inputs
     #       who_infected:       adjacency relations for the infected subgraph
@@ -152,6 +152,8 @@ def max_likelihood(who_infected, virtual_source, adjacency, max_infection, dist_
     #       ml_estimate         maximum likelihood node
     #       likelihoods         likelihoods for all the nodes in teh graph
     
+    virtual_source_candidates = [idx for idx, i in enumerate(who_infected) if len(i) > 1]
+    virtual_source = random.choice(virtual_source_candidates)
     paths = [[] for i in range(len(who_infected))]
     paths[virtual_source].append(virtual_source)
     paths = get_paths(paths, who_infected, adjacency, virtual_source, virtual_source)
@@ -172,15 +174,8 @@ def max_likelihood(who_infected, virtual_source, adjacency, max_infection, dist_
     max_likelihood = max(likelihoods)
     indices = [i for i, x in enumerate(likelihoods) if x == max_likelihood]
     ml_estimate = random.choice(indices)
-    # print('Finding the tree distance')
-    # tree_dist = dist_from_source[ml_estimate]
-    # print('Tree distance: ', tree_dist)
-    # print('Tree distance: ', tree_dist, '. Now finding real dist. ')
-    real_dist = get_estimate_dist(source, ml_estimate, adjacency)
-    # print('Real distance: ', real_dist)
-    # distances = [tree_dist, real_dist]
-    distances = real_dist
-    return ml_estimate, likelihoods, distances
+
+    return ml_estimate, likelihoods
     
 def compute_graph_likelihood(source, who_infected, adjacency, vs_path, max_infection):
     # compute the likelihood of the infected subgraph starting from node source
@@ -291,7 +286,11 @@ def infect_set_likelihood(infected, adjacency_choices, new_infection_pattern, ma
     elif num_infected == 0:
         likelihood = 1
     else:
-        likelihood = math.log(1.0 / utilities.nCk(di, num_infected))
+        # If di > num_infected, the likelihood of virtual source being the true source is small
+        try:
+            likelihood = math.log(1.0 / utilities.nCk(di, num_infected))
+        except:
+            likelihood = 0.0000000001
         
     return likelihood
 
